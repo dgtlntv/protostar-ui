@@ -1,10 +1,15 @@
 import uuid
-from typing import Any
+from typing import Any, List
 
 from sqlmodel import Session, select
 
 from app.core.security import get_password_hash, verify_password
-from app.models import Item, ItemCreate, User, UserCreate, UserUpdate
+from app.models import (
+    User, UserCreate, UserUpdate,
+    Prototype, PrototypeCreate, 
+    PrototypeCollaborator, CollaboratorRole,
+    CollaboratorAdd, CollaboratorInfo
+)
 
 
 def create_user(*, session: Session, user_create: UserCreate) -> User:
@@ -37,6 +42,12 @@ def get_user_by_email(*, session: Session, email: str) -> User | None:
     return session_user
 
 
+def get_user_by_id(*, session: Session, user_id: uuid.UUID) -> User | None:
+    statement = select(User).where(User.id == user_id)
+    session_user = session.exec(statement).first()
+    return session_user
+
+
 def authenticate(*, session: Session, email: str, password: str) -> User | None:
     db_user = get_user_by_email(session=session, email=email)
     if not db_user:
@@ -46,9 +57,178 @@ def authenticate(*, session: Session, email: str, password: str) -> User | None:
     return db_user
 
 
-def create_item(*, session: Session, item_in: ItemCreate, owner_id: uuid.UUID) -> Item:
-    db_item = Item.model_validate(item_in, update={"owner_id": owner_id})
-    session.add(db_item)
+def create_prototype(
+    *, session: Session, prototype_in: PrototypeCreate, owner_id: uuid.UUID
+) -> Prototype:
+    db_prototype = Prototype.model_validate(prototype_in, update={"owner_id": owner_id})
+    session.add(db_prototype)
     session.commit()
-    session.refresh(db_item)
-    return db_item
+    session.refresh(db_prototype)
+    return db_prototype
+
+
+def get_prototype(*, session: Session, prototype_id: uuid.UUID) -> Prototype | None:
+    statement = select(Prototype).where(Prototype.id == prototype_id)
+    return session.exec(statement).first()
+
+
+def get_user_prototypes(*, session: Session, user_id: uuid.UUID) -> List[Prototype]:
+    # Get prototypes where user is owner
+    owned_statement = select(Prototype).where(Prototype.owner_id == user_id)
+    owned_prototypes = session.exec(owned_statement).all()
+    
+    # Get prototypes where user is collaborator
+    collab_statement = (
+        select(Prototype)
+        .join(PrototypeCollaborator)
+        .where(PrototypeCollaborator.user_id == user_id)
+    )
+    shared_prototypes = session.exec(collab_statement).all()
+    
+    return list(set(owned_prototypes + shared_prototypes))
+
+
+def get_public_prototypes(*, session: Session) -> List[Prototype]:
+    statement = select(Prototype).where(Prototype.visibility == "public")
+    return session.exec(statement).all()
+
+
+# Collaborator management functions
+def add_collaborator(
+    *, 
+    session: Session, 
+    prototype_id: uuid.UUID, 
+    collaborator_email: str,
+    role: CollaboratorRole
+) -> CollaboratorInfo:
+    # Get user by email
+    user = get_user_by_email(session=session, email=collaborator_email)
+    if not user:
+        raise ValueError(f"User with email {collaborator_email} not found")
+    
+    # Create collaborator relationship
+    db_collaborator = PrototypeCollaborator(
+        prototype_id=prototype_id,
+        user_id=user.id,
+        role=role
+    )
+    session.add(db_collaborator)
+    session.commit()
+    
+    return CollaboratorInfo(
+        email=user.email,
+        role=role,
+        user_id=user.id
+    )
+
+
+def update_collaborator_role(
+    *,
+    session: Session,
+    prototype_id: uuid.UUID,
+    user_id: uuid.UUID,
+    new_role: CollaboratorRole
+) -> CollaboratorInfo:
+    statement = select(PrototypeCollaborator).where(
+        PrototypeCollaborator.prototype_id == prototype_id,
+        PrototypeCollaborator.user_id == user_id
+    )
+    db_collaborator = session.exec(statement).first()
+    if not db_collaborator:
+        raise ValueError("Collaborator not found")
+    
+    db_collaborator.role = new_role
+    session.add(db_collaborator)
+    session.commit()
+    
+    user = get_user_by_id(session=session, user_id=user_id)
+    return CollaboratorInfo(
+        email=user.email,  # type: ignore
+        role=new_role,
+        user_id=user_id
+    )
+
+
+def remove_collaborator(
+    *,
+    session: Session,
+    prototype_id: uuid.UUID,
+    collaborator_email: str
+) -> None:
+    user = get_user_by_email(session=session, email=collaborator_email)
+    if not user:
+        raise ValueError(f"User with email {collaborator_email} not found")
+    
+    statement = select(PrototypeCollaborator).where(
+        PrototypeCollaborator.prototype_id == prototype_id,
+        PrototypeCollaborator.user_id == user.id
+    )
+    db_collaborator = session.exec(statement).first()
+    if not db_collaborator:
+        raise ValueError("Collaborator not found")
+    
+    session.delete(db_collaborator)
+    session.commit()
+
+
+def get_prototype_collaborators(
+    *, session: Session, prototype_id: uuid.UUID
+) -> List[CollaboratorInfo]:
+    statement = (
+        select(PrototypeCollaborator, User)
+        .join(User)
+        .where(PrototypeCollaborator.prototype_id == prototype_id)
+    )
+    results = session.exec(statement).all()
+    
+    return [
+        CollaboratorInfo(
+            email=user.email,
+            role=collab.role,
+            user_id=user.id
+        )
+        for collab, user in results
+    ]
+
+
+def can_access_prototype(
+    *, session: Session, user_id: uuid.UUID, prototype_id: uuid.UUID
+) -> bool:
+    prototype = get_prototype(session=session, prototype_id=prototype_id)
+    if not prototype:
+        return False
+    
+    # Check if prototype is public
+    if prototype.visibility == "public":
+        return True
+    
+    # Check if user is owner
+    if prototype.owner_id == user_id:
+        return True
+    
+    # Check if user is collaborator
+    statement = select(PrototypeCollaborator).where(
+        PrototypeCollaborator.prototype_id == prototype_id,
+        PrototypeCollaborator.user_id == user_id
+    )
+    return session.exec(statement).first() is not None
+
+
+def can_edit_prototype(
+    *, session: Session, user_id: uuid.UUID, prototype_id: uuid.UUID
+) -> bool:
+    prototype = get_prototype(session=session, prototype_id=prototype_id)
+    if not prototype:
+        return False
+    
+    # Check if user is owner
+    if prototype.owner_id == user_id:
+        return True
+    
+    # Check if user is editor
+    statement = select(PrototypeCollaborator).where(
+        PrototypeCollaborator.prototype_id == prototype_id,
+        PrototypeCollaborator.user_id == user_id,
+        PrototypeCollaborator.role == CollaboratorRole.EDITOR
+    )
+    return session.exec(statement).first() is not None
