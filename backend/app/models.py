@@ -1,7 +1,8 @@
+import enum
 import uuid
-
+from typing import Any
 from pydantic import EmailStr
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, Relationship, SQLModel, JSON
 
 
 # Shared properties
@@ -43,53 +44,91 @@ class UpdatePassword(SQLModel):
 class User(UserBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     hashed_password: str
-    items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
+    owned_prototypes: list["Prototype"] = Relationship(back_populates="owner", cascade_delete=True)
+    shared_prototypes: list["Prototype"] = Relationship(back_populates="collaborators", link_model="PrototypeCollaborator")
 
 
-# Properties to return via API, id is always required
-class UserPublic(UserBase):
-    id: uuid.UUID
+class PrototypeVisibility(str, enum.Enum):
+    PRIVATE = "private"
+    PUBLIC = "public"
 
 
-class UsersPublic(SQLModel):
-    data: list[UserPublic]
-    count: int
+class CollaboratorRole(str, enum.Enum):
+    VIEWER = "viewer"
+    EDITOR = "editor"
 
+
+# Junction table for prototype collaborators
+class PrototypeCollaborator(SQLModel, table=True):
+    prototype_id: uuid.UUID = Field(foreign_key="prototype.id", primary_key=True)
+    user_id: uuid.UUID = Field(foreign_key="user.id", primary_key=True)
+    role: CollaboratorRole = Field(default=CollaboratorRole.VIEWER)
+    
 
 # Shared properties
-class ItemBase(SQLModel):
+class PrototypeBase(SQLModel):
     title: str = Field(min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=255)
+    content: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
+    visibility: PrototypeVisibility = Field(default=PrototypeVisibility.PRIVATE)
 
 
-# Properties to receive on item creation
-class ItemCreate(ItemBase):
+# Properties to receive on prototype creation
+class PrototypeCreate(PrototypeBase):
     pass
 
 
-# Properties to receive on item update
-class ItemUpdate(ItemBase):
+# Properties to receive on prototype update
+class PrototypeUpdate(PrototypeBase):
     title: str | None = Field(default=None, min_length=1, max_length=255)  # type: ignore
+    content: dict[str, Any] | None = None
+    visibility: PrototypeVisibility | None = None
 
 
 # Database model, database table inferred from class name
-class Item(ItemBase, table=True):
+class Prototype(PrototypeBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     title: str = Field(max_length=255)
     owner_id: uuid.UUID = Field(
         foreign_key="user.id", nullable=False, ondelete="CASCADE"
     )
-    owner: User | None = Relationship(back_populates="items")
+    owner: User | None = Relationship(back_populates="owned_prototypes")
+    collaborators: list[User] = Relationship(back_populates="shared_prototypes", link_model="PrototypeCollaborator")
 
 
 # Properties to return via API, id is always required
-class ItemPublic(ItemBase):
+class PrototypePublic(PrototypeBase):
     id: uuid.UUID
     owner_id: uuid.UUID
 
 
-class ItemsPublic(SQLModel):
-    data: list[ItemPublic]
+class PrototypesPublic(SQLModel):
+    data: list[PrototypePublic]
+    count: int
+
+
+# Collaborator management models
+class CollaboratorAdd(SQLModel):
+    email: EmailStr
+    role: CollaboratorRole
+
+
+class CollaboratorUpdate(SQLModel):
+    role: CollaboratorRole
+
+
+class CollaboratorDelete(SQLModel):
+    email: EmailStr
+
+
+class CollaboratorInfo(SQLModel):
+    email: EmailStr
+    role: CollaboratorRole
+    user_id: uuid.UUID
+
+
+class CollaboratorsPublic(SQLModel):
+    data: list[CollaboratorInfo]
     count: int
 
 
