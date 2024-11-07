@@ -1,14 +1,15 @@
 import enum
 import uuid
-from typing import Any, List
+from typing import Any
+
 from pydantic import EmailStr
-from sqlmodel import Field, Relationship, SQLModel, JSON
+from sqlmodel import JSON, Field, Relationship, SQLModel
 
 
 # Junction table for prototype collaborators
 class PrototypeCollaborator(SQLModel, table=True):
     __tablename__ = "prototype_collaborator"
-    
+
     prototype_id: uuid.UUID = Field(foreign_key="prototype.id", primary_key=True)
     user_id: uuid.UUID = Field(foreign_key="user.id", primary_key=True)
     role: str = Field(default="viewer")
@@ -59,28 +60,38 @@ class UpdatePassword(SQLModel):
     new_password: str = Field(min_length=8, max_length=40)
 
 
+# Database model for User
+class User(UserBase, table=True):
+    __tablename__ = "user"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    hashed_password: str
+    owned_prototypes: list["Prototype"] = Relationship(back_populates="owner")
+    shared_prototypes: list["Prototype"] = Relationship(
+        back_populates="collaborators",
+        link_model=PrototypeCollaborator,
+        sa_relationship_kwargs={
+            "secondary": PrototypeCollaborator.__table__,
+        },
+    )
+
+
+# Properties to return via API, id is always required
+class UserPublic(UserBase):
+    id: uuid.UUID
+
+
+class UsersPublic(SQLModel):
+    data: list[UserPublic]
+    count: int
+
+
 # Shared properties for Prototype
 class PrototypeBase(SQLModel):
     title: str = Field(min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=255)
     content: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
     visibility: str = Field(default="private")
-
-
-# Database model for User
-class User(UserBase, table=True):
-    __tablename__ = "user"
-    
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    hashed_password: str
-    owned_prototypes: List["Prototype"] = Relationship(back_populates="owner")
-    shared_prototypes: List["Prototype"] = Relationship(
-        back_populates="collaborators",
-        link_model=PrototypeCollaborator,
-        sa_relationship_kwargs={
-            'secondary': PrototypeCollaborator.__table__,
-        }
-    )
 
 
 # Properties to receive on prototype creation
@@ -98,17 +109,17 @@ class PrototypeUpdate(PrototypeBase):
 # Database model for Prototype
 class Prototype(PrototypeBase, table=True):
     __tablename__ = "prototype"
-    
+
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     title: str = Field(max_length=255)
     owner_id: uuid.UUID = Field(foreign_key="user.id", nullable=False)
     owner: User = Relationship(back_populates="owned_prototypes")
-    collaborators: List[User] = Relationship(
+    collaborators: list[User] = Relationship(
         back_populates="shared_prototypes",
         link_model=PrototypeCollaborator,
         sa_relationship_kwargs={
-            'secondary': PrototypeCollaborator.__table__,
-        }
+            "secondary": PrototypeCollaborator.__table__,
+        },
     )
 
 
