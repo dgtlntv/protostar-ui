@@ -7,7 +7,6 @@ from app import crud
 from app.api.deps import CurrentUser, SessionDep
 from app.models import (
     CollaboratorAdd,
-    CollaboratorDelete,
     CollaboratorInfo,
     CollaboratorsPublic,
     CollaboratorUpdate,
@@ -28,16 +27,10 @@ def read_prototypes(
     """
     Retrieve prototypes. Returns public prototypes and user's own prototypes.
     """
-    # Get prototypes the user has access to
     user_prototypes = crud.get_user_prototypes(session=session, user_id=current_user.id)
-
-    # Apply pagination
     start = skip
     end = skip + limit
     paginated_prototypes = user_prototypes[start:end]
-
-    print(PrototypesPublic(data=paginated_prototypes, count=len(user_prototypes)))
-
     return PrototypesPublic(data=paginated_prototypes, count=len(user_prototypes))
 
 
@@ -61,18 +54,11 @@ def read_prototype(
     """
     Get prototype by ID.
     """
-    # Check if user can access the prototype
-    if not crud.can_access_prototype(
+    prototype = crud.get_prototype(session=session, prototype_id=prototype_id)
+    if not prototype or not crud.can_access_prototype(
         session=session, user_id=current_user.id, prototype_id=prototype_id
     ):
-        raise HTTPException(
-            status_code=403, detail="Not enough permissions to access this prototype"
-        )
-
-    prototype = crud.get_prototype(session=session, prototype_id=prototype_id)
-    if not prototype:
-        raise HTTPException(status_code=404, detail="Prototype not found")
-
+        raise HTTPException(status_code=403, detail="Access denied")
     return prototype
 
 
@@ -87,17 +73,11 @@ def update_prototype(
     """
     Update a prototype.
     """
-    # Check if user can edit the prototype
-    if not crud.can_edit_prototype(
+    prototype = crud.get_prototype(session=session, prototype_id=prototype_id)
+    if not prototype or not crud.can_edit_prototype(
         session=session, user_id=current_user.id, prototype_id=prototype_id
     ):
-        raise HTTPException(
-            status_code=403, detail="Not enough permissions to edit this prototype"
-        )
-
-    prototype = crud.get_prototype(session=session, prototype_id=prototype_id)
-    if not prototype:
-        raise HTTPException(status_code=404, detail="Prototype not found")
+        raise HTTPException(status_code=403, detail="Access denied")
 
     update_dict = prototype_in.model_dump(exclude_unset=True)
     prototype.sqlmodel_update(update_dict)
@@ -115,20 +95,14 @@ def delete_prototype(
     Delete a prototype. Only owner can delete.
     """
     prototype = crud.get_prototype(session=session, prototype_id=prototype_id)
-    if not prototype:
-        raise HTTPException(status_code=404, detail="Prototype not found")
-
-    if prototype.owner_id != current_user.id:
-        raise HTTPException(
-            status_code=403, detail="Only the owner can delete a prototype"
-        )
+    if not prototype or prototype.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     session.delete(prototype)
     session.commit()
     return Message(message="Prototype deleted successfully")
 
 
-# Collaborator management endpoints
 @router.get("/{prototype_id}/collaborators", response_model=CollaboratorsPublic)
 def read_collaborators(
     *, session: SessionDep, current_user: CurrentUser, prototype_id: uuid.UUID
@@ -136,54 +110,53 @@ def read_collaborators(
     """
     Get all collaborators for a prototype.
     """
-
-    if not crud.can_access_prototype(
+    prototype = crud.get_prototype(session=session, prototype_id=prototype_id)
+    if not prototype or not crud.can_access_prototype(
         session=session, user_id=current_user.id, prototype_id=prototype_id
     ):
-        raise HTTPException(
-            status_code=403, detail="Not enough permissions to view collaborators"
-        )
-
-    prototype = crud.get_prototype(session=session, prototype_id=prototype_id)
-    if not prototype:
-        raise HTTPException(status_code=404, detail="Prototype not found")
+        raise HTTPException(status_code=403, detail="Access denied")
 
     collaborators = crud.get_prototype_collaborators(
         session=session, prototype_id=prototype_id
     )
-
     return CollaboratorsPublic(data=collaborators, count=len(collaborators))
 
 
-@router.post("/{prototype_id}/collaborators", response_model=CollaboratorInfo)
+@router.post("/{prototype_id}/collaborators/{user_id}", response_model=CollaboratorInfo)
 def add_collaborator(
     *,
     session: SessionDep,
     current_user: CurrentUser,
     prototype_id: uuid.UUID,
+    user_id: uuid.UUID,
     collaborator_in: CollaboratorAdd,
 ) -> Any:
     """
-    Add a collaborator to a prototype. Only owner can add collaborators.
+    Add a collaborator to a prototype using their user ID.
     """
     prototype = crud.get_prototype(session=session, prototype_id=prototype_id)
-    if not prototype:
-        raise HTTPException(status_code=404, detail="Prototype not found")
+    if not prototype or prototype.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
 
-    if prototype.owner_id != current_user.id:
+    # Check if collaborator already exists
+    existing_collaborators = crud.get_prototype_collaborators(
+        session=session, prototype_id=prototype_id
+    )
+    if any(collaborator.user_id == user_id for collaborator in existing_collaborators):
         raise HTTPException(
-            status_code=403, detail="Only the owner can add collaborators"
+            status_code=400,
+            detail="User is already a collaborator for this prototype",
         )
 
     try:
         collaborator = crud.add_collaborator(
             session=session,
             prototype_id=prototype_id,
-            collaborator_email=collaborator_in.email,
+            user_id=user_id,
             role=collaborator_in.role,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid request")
 
     return collaborator
 
@@ -201,13 +174,8 @@ def update_collaborator(
     Update a collaborator's role. Only owner can update roles.
     """
     prototype = crud.get_prototype(session=session, prototype_id=prototype_id)
-    if not prototype:
-        raise HTTPException(status_code=404, detail="Prototype not found")
-
-    if prototype.owner_id != current_user.id:
-        raise HTTPException(
-            status_code=403, detail="Only the owner can update collaborator roles"
-        )
+    if not prototype or prototype.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     try:
         collaborator = crud.update_collaborator_role(
@@ -216,39 +184,34 @@ def update_collaborator(
             user_id=user_id,
             new_role=collaborator_in.role,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid request")
 
     return collaborator
 
 
-@router.delete("/{prototype_id}/collaborators")
+@router.delete("/{prototype_id}/collaborators/{user_id}")
 def remove_collaborator(
     *,
     session: SessionDep,
     current_user: CurrentUser,
     prototype_id: uuid.UUID,
-    collaborator_in: CollaboratorDelete,
+    user_id: uuid.UUID,
 ) -> Message:
     """
-    Remove a collaborator from a prototype. Only owner can remove collaborators.
+    Remove a collaborator from a prototype using their user ID. Only owner can remove collaborators.
     """
     prototype = crud.get_prototype(session=session, prototype_id=prototype_id)
-    if not prototype:
-        raise HTTPException(status_code=404, detail="Prototype not found")
-
-    if prototype.owner_id != current_user.id:
-        raise HTTPException(
-            status_code=403, detail="Only the owner can remove collaborators"
-        )
+    if not prototype or prototype.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     try:
         crud.remove_collaborator(
             session=session,
             prototype_id=prototype_id,
-            collaborator_email=collaborator_in.email,
+            user_id=user_id,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid request")
 
     return Message(message="Collaborator removed successfully")

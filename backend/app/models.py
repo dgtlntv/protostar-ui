@@ -136,7 +136,6 @@ class PrototypesPublic(SQLModel):
 
 # Collaborator management models
 class CollaboratorAdd(SQLModel):
-    email: EmailStr
     role: CollaboratorRole
 
 
@@ -145,13 +144,12 @@ class CollaboratorUpdate(SQLModel):
 
 
 class CollaboratorDelete(SQLModel):
-    email: EmailStr
+    user_id: uuid.UUID
 
 
 class CollaboratorInfo(SQLModel):
-    email: EmailStr
-    role: CollaboratorRole
     user_id: uuid.UUID
+    role: CollaboratorRole
 
 
 class CollaboratorsPublic(SQLModel):
