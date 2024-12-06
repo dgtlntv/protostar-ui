@@ -1,8 +1,28 @@
 import enum
 import uuid
 from typing import Any
+
 from pydantic import EmailStr
-from sqlmodel import Field, Relationship, SQLModel, JSON
+from sqlmodel import JSON, Field, Relationship, SQLModel
+
+
+# Junction table for prototype collaborators
+class PrototypeCollaborator(SQLModel, table=True):
+    __tablename__ = "prototype_collaborator"
+
+    prototype_id: uuid.UUID = Field(foreign_key="prototype.id", primary_key=True)
+    user_id: uuid.UUID = Field(foreign_key="user.id", primary_key=True)
+    role: str = Field(default="viewer")
+
+
+class PrototypeVisibility(str, enum.Enum):
+    PRIVATE = "private"
+    PUBLIC = "public"
+
+
+class CollaboratorRole(str, enum.Enum):
+    VIEWER = "viewer"
+    EDITOR = "editor"
 
 
 # Shared properties
@@ -40,37 +60,38 @@ class UpdatePassword(SQLModel):
     new_password: str = Field(min_length=8, max_length=40)
 
 
-# Database model, database table inferred from class name
+# Database model for User
 class User(UserBase, table=True):
+    __tablename__ = "user"
+
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     hashed_password: str
-    owned_prototypes: list["Prototype"] = Relationship(back_populates="owner", cascade_delete=True)
-    shared_prototypes: list["Prototype"] = Relationship(back_populates="collaborators", link_model="PrototypeCollaborator")
+    owned_prototypes: list["Prototype"] = Relationship(back_populates="owner")
+    shared_prototypes: list["Prototype"] = Relationship(
+        back_populates="collaborators",
+        link_model=PrototypeCollaborator,
+        sa_relationship_kwargs={
+            "secondary": PrototypeCollaborator.__table__,
+        },
+    )
 
 
-class PrototypeVisibility(str, enum.Enum):
-    PRIVATE = "private"
-    PUBLIC = "public"
+# Properties to return via API, id is always required
+class UserPublic(UserBase):
+    id: uuid.UUID
 
 
-class CollaboratorRole(str, enum.Enum):
-    VIEWER = "viewer"
-    EDITOR = "editor"
+class UsersPublic(SQLModel):
+    data: list[UserPublic]
+    count: int
 
 
-# Junction table for prototype collaborators
-class PrototypeCollaborator(SQLModel, table=True):
-    prototype_id: uuid.UUID = Field(foreign_key="prototype.id", primary_key=True)
-    user_id: uuid.UUID = Field(foreign_key="user.id", primary_key=True)
-    role: CollaboratorRole = Field(default=CollaboratorRole.VIEWER)
-    
-
-# Shared properties
+# Shared properties for Prototype
 class PrototypeBase(SQLModel):
     title: str = Field(min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=255)
     content: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
-    visibility: PrototypeVisibility = Field(default=PrototypeVisibility.PRIVATE)
+    visibility: str = Field(default="private")
 
 
 # Properties to receive on prototype creation
@@ -82,18 +103,24 @@ class PrototypeCreate(PrototypeBase):
 class PrototypeUpdate(PrototypeBase):
     title: str | None = Field(default=None, min_length=1, max_length=255)  # type: ignore
     content: dict[str, Any] | None = None
-    visibility: PrototypeVisibility | None = None
+    visibility: str | None = None
 
 
-# Database model, database table inferred from class name
+# Database model for Prototype
 class Prototype(PrototypeBase, table=True):
+    __tablename__ = "prototype"
+
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     title: str = Field(max_length=255)
-    owner_id: uuid.UUID = Field(
-        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+    owner_id: uuid.UUID = Field(foreign_key="user.id", nullable=False)
+    owner: User = Relationship(back_populates="owned_prototypes")
+    collaborators: list[User] = Relationship(
+        back_populates="shared_prototypes",
+        link_model=PrototypeCollaborator,
+        sa_relationship_kwargs={
+            "secondary": PrototypeCollaborator.__table__,
+        },
     )
-    owner: User | None = Relationship(back_populates="owned_prototypes")
-    collaborators: list[User] = Relationship(back_populates="shared_prototypes", link_model="PrototypeCollaborator")
 
 
 # Properties to return via API, id is always required
@@ -109,7 +136,6 @@ class PrototypesPublic(SQLModel):
 
 # Collaborator management models
 class CollaboratorAdd(SQLModel):
-    email: EmailStr
     role: CollaboratorRole
 
 
@@ -118,13 +144,12 @@ class CollaboratorUpdate(SQLModel):
 
 
 class CollaboratorDelete(SQLModel):
-    email: EmailStr
+    user_id: uuid.UUID
 
 
 class CollaboratorInfo(SQLModel):
-    email: EmailStr
-    role: CollaboratorRole
     user_id: uuid.UUID
+    role: CollaboratorRole
 
 
 class CollaboratorsPublic(SQLModel):

@@ -7,30 +7,28 @@ export type Body_login_login_access_token = {
   client_secret?: string | null
 }
 
+export type CollaboratorAdd = {
+  role: CollaboratorRole
+}
+
+export type CollaboratorInfo = {
+  user_id: string
+  role: CollaboratorRole
+}
+
+export type CollaboratorRole = "viewer" | "editor"
+
+export type CollaboratorUpdate = {
+  role: CollaboratorRole
+}
+
+export type CollaboratorsPublic = {
+  data: Array<CollaboratorInfo>
+  count: number
+}
+
 export type HTTPValidationError = {
   detail?: Array<ValidationError>
-}
-
-export type ItemCreate = {
-  title: string
-  description?: string | null
-}
-
-export type ItemPublic = {
-  title: string
-  description?: string | null
-  id: string
-  owner_id: string
-}
-
-export type ItemUpdate = {
-  title?: string | null
-  description?: string | null
-}
-
-export type ItemsPublic = {
-  data: Array<ItemPublic>
-  count: number
 }
 
 export type Message = {
@@ -40,6 +38,34 @@ export type Message = {
 export type NewPassword = {
   token: string
   new_password: string
+}
+
+export type PrototypeCreate = {
+  title: string
+  description?: string | null
+  content?: Record<string, unknown>
+  visibility?: string
+}
+
+export type PrototypePublic = {
+  title: string
+  description?: string | null
+  content?: Record<string, unknown>
+  visibility?: string
+  id: string
+  owner_id: string
+}
+
+export type PrototypeUpdate = {
+  title?: string | null
+  description?: string | null
+  content?: Record<string, unknown> | null
+  visibility?: string | null
+}
+
+export type PrototypesPublic = {
+  data: Array<PrototypePublic>
+  count: number
 }
 
 export type Token = {

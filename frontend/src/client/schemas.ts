@@ -49,6 +49,59 @@ export const $Body_login_login_access_token = {
   },
 } as const
 
+export const $CollaboratorAdd = {
+  properties: {
+    role: {
+      type: "CollaboratorRole",
+      isRequired: true,
+    },
+  },
+} as const
+
+export const $CollaboratorInfo = {
+  properties: {
+    user_id: {
+      type: "string",
+      isRequired: true,
+      format: "uuid",
+    },
+    role: {
+      type: "CollaboratorRole",
+      isRequired: true,
+    },
+  },
+} as const
+
+export const $CollaboratorRole = {
+  type: "Enum",
+  enum: ["viewer", "editor"],
+} as const
+
+export const $CollaboratorUpdate = {
+  properties: {
+    role: {
+      type: "CollaboratorRole",
+      isRequired: true,
+    },
+  },
+} as const
+
+export const $CollaboratorsPublic = {
+  properties: {
+    data: {
+      type: "array",
+      contains: {
+        type: "CollaboratorInfo",
+      },
+      isRequired: true,
+    },
+    count: {
+      type: "number",
+      isRequired: true,
+    },
+  },
+} as const
+
 export const $HTTPValidationError = {
   properties: {
     detail: {
@@ -60,30 +113,31 @@ export const $HTTPValidationError = {
   },
 } as const
 
-export const $ItemCreate = {
+export const $Message = {
   properties: {
-    title: {
+    message: {
       type: "string",
       isRequired: true,
-      maxLength: 255,
-      minLength: 1,
-    },
-    description: {
-      type: "any-of",
-      contains: [
-        {
-          type: "string",
-          maxLength: 255,
-        },
-        {
-          type: "null",
-        },
-      ],
     },
   },
 } as const
 
-export const $ItemPublic = {
+export const $NewPassword = {
+  properties: {
+    token: {
+      type: "string",
+      isRequired: true,
+    },
+    new_password: {
+      type: "string",
+      isRequired: true,
+      maxLength: 40,
+      minLength: 8,
+    },
+  },
+} as const
+
+export const $PrototypeCreate = {
   properties: {
     title: {
       type: "string",
@@ -102,6 +156,49 @@ export const $ItemPublic = {
           type: "null",
         },
       ],
+    },
+    content: {
+      type: "dictionary",
+      contains: {
+        properties: {},
+      },
+    },
+    visibility: {
+      type: "string",
+      default: "private",
+    },
+  },
+} as const
+
+export const $PrototypePublic = {
+  properties: {
+    title: {
+      type: "string",
+      isRequired: true,
+      maxLength: 255,
+      minLength: 1,
+    },
+    description: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+          maxLength: 255,
+        },
+        {
+          type: "null",
+        },
+      ],
+    },
+    content: {
+      type: "dictionary",
+      contains: {
+        properties: {},
+      },
+    },
+    visibility: {
+      type: "string",
+      default: "private",
     },
     id: {
       type: "string",
@@ -116,7 +213,7 @@ export const $ItemPublic = {
   },
 } as const
 
-export const $ItemUpdate = {
+export const $PrototypeUpdate = {
   properties: {
     title: {
       type: "any-of",
@@ -143,45 +240,46 @@ export const $ItemUpdate = {
         },
       ],
     },
+    content: {
+      type: "any-of",
+      contains: [
+        {
+          type: "dictionary",
+          contains: {
+            properties: {},
+          },
+        },
+        {
+          type: "null",
+        },
+      ],
+    },
+    visibility: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+        },
+        {
+          type: "null",
+        },
+      ],
+    },
   },
 } as const
 
-export const $ItemsPublic = {
+export const $PrototypesPublic = {
   properties: {
     data: {
       type: "array",
       contains: {
-        type: "ItemPublic",
+        type: "PrototypePublic",
       },
       isRequired: true,
     },
     count: {
       type: "number",
       isRequired: true,
-    },
-  },
-} as const
-
-export const $Message = {
-  properties: {
-    message: {
-      type: "string",
-      isRequired: true,
-    },
-  },
-} as const
-
-export const $NewPassword = {
-  properties: {
-    token: {
-      type: "string",
-      isRequired: true,
-    },
-    new_password: {
-      type: "string",
-      isRequired: true,
-      maxLength: 40,
-      minLength: 8,
     },
   },
 } as const

@@ -14,12 +14,16 @@ import { Route as rootRoute } from './routes/__root'
 import { Route as SignupImport } from './routes/signup'
 import { Route as ResetPasswordImport } from './routes/reset-password'
 import { Route as RecoverPasswordImport } from './routes/recover-password'
+import { Route as PrototypesImport } from './routes/prototypes'
+import { Route as PrototypeImport } from './routes/prototype'
 import { Route as LoginImport } from './routes/login'
 import { Route as LayoutImport } from './routes/_layout'
 import { Route as LayoutIndexImport } from './routes/_layout/index'
 import { Route as LayoutSettingsImport } from './routes/_layout/settings'
-import { Route as LayoutItemsImport } from './routes/_layout/items'
 import { Route as LayoutAdminImport } from './routes/_layout/admin'
+import { Route as PrototypePrototypeIdPlayImport } from './routes/prototype.$prototypeId.play'
+import { Route as LayoutPrototypeAllImport } from './routes/_layout/prototype.all'
+import { Route as LayoutPrototypePrototypeIdEditImport } from './routes/_layout/prototype.$prototypeId.edit'
 
 // Create/Update Routes
 
@@ -35,6 +39,16 @@ const ResetPasswordRoute = ResetPasswordImport.update({
 
 const RecoverPasswordRoute = RecoverPasswordImport.update({
   path: '/recover-password',
+  getParentRoute: () => rootRoute,
+} as any)
+
+const PrototypesRoute = PrototypesImport.update({
+  path: '/prototypes',
+  getParentRoute: () => rootRoute,
+} as any)
+
+const PrototypeRoute = PrototypeImport.update({
+  path: '/prototype',
   getParentRoute: () => rootRoute,
 } as any)
 
@@ -58,15 +72,26 @@ const LayoutSettingsRoute = LayoutSettingsImport.update({
   getParentRoute: () => LayoutRoute,
 } as any)
 
-const LayoutItemsRoute = LayoutItemsImport.update({
-  path: '/items',
-  getParentRoute: () => LayoutRoute,
-} as any)
-
 const LayoutAdminRoute = LayoutAdminImport.update({
   path: '/admin',
   getParentRoute: () => LayoutRoute,
 } as any)
+
+const PrototypePrototypeIdPlayRoute = PrototypePrototypeIdPlayImport.update({
+  path: '/$prototypeId/play',
+  getParentRoute: () => PrototypeRoute,
+} as any)
+
+const LayoutPrototypeAllRoute = LayoutPrototypeAllImport.update({
+  path: '/prototype/all',
+  getParentRoute: () => LayoutRoute,
+} as any)
+
+const LayoutPrototypePrototypeIdEditRoute =
+  LayoutPrototypePrototypeIdEditImport.update({
+    path: '/prototype/$prototypeId/edit',
+    getParentRoute: () => LayoutRoute,
+  } as any)
 
 // Populate the FileRoutesByPath interface
 
@@ -78,6 +103,14 @@ declare module '@tanstack/react-router' {
     }
     '/login': {
       preLoaderRoute: typeof LoginImport
+      parentRoute: typeof rootRoute
+    }
+    '/prototype': {
+      preLoaderRoute: typeof PrototypeImport
+      parentRoute: typeof rootRoute
+    }
+    '/prototypes': {
+      preLoaderRoute: typeof PrototypesImport
       parentRoute: typeof rootRoute
     }
     '/recover-password': {
@@ -96,16 +129,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAdminImport
       parentRoute: typeof LayoutImport
     }
-    '/_layout/items': {
-      preLoaderRoute: typeof LayoutItemsImport
-      parentRoute: typeof LayoutImport
-    }
     '/_layout/settings': {
       preLoaderRoute: typeof LayoutSettingsImport
       parentRoute: typeof LayoutImport
     }
     '/_layout/': {
       preLoaderRoute: typeof LayoutIndexImport
+      parentRoute: typeof LayoutImport
+    }
+    '/_layout/prototype/all': {
+      preLoaderRoute: typeof LayoutPrototypeAllImport
+      parentRoute: typeof LayoutImport
+    }
+    '/prototype/$prototypeId/play': {
+      preLoaderRoute: typeof PrototypePrototypeIdPlayImport
+      parentRoute: typeof PrototypeImport
+    }
+    '/_layout/prototype/$prototypeId/edit': {
+      preLoaderRoute: typeof LayoutPrototypePrototypeIdEditImport
       parentRoute: typeof LayoutImport
     }
   }
@@ -116,11 +157,14 @@ declare module '@tanstack/react-router' {
 export const routeTree = rootRoute.addChildren([
   LayoutRoute.addChildren([
     LayoutAdminRoute,
-    LayoutItemsRoute,
     LayoutSettingsRoute,
     LayoutIndexRoute,
+    LayoutPrototypeAllRoute,
+    LayoutPrototypePrototypeIdEditRoute,
   ]),
   LoginRoute,
+  PrototypeRoute.addChildren([PrototypePrototypeIdPlayRoute]),
+  PrototypesRoute,
   RecoverPasswordRoute,
   ResetPasswordRoute,
   SignupRoute,

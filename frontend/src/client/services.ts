@@ -14,10 +14,14 @@ import type {
   UsersPublic,
   UserUpdate,
   UserUpdateMe,
-  ItemCreate,
-  ItemPublic,
-  ItemsPublic,
-  ItemUpdate,
+  CollaboratorAdd,
+  CollaboratorInfo,
+  CollaboratorsPublic,
+  CollaboratorUpdate,
+  PrototypeCreate,
+  PrototypePublic,
+  PrototypesPublic,
+  PrototypeUpdate,
 } from "./models"
 
 export type TDataLoginAccessToken = {
@@ -362,6 +366,250 @@ export class UsersService {
   }
 }
 
+export type TDataReadPrototypes = {
+  limit?: number
+  skip?: number
+}
+export type TDataCreatePrototype = {
+  requestBody: PrototypeCreate
+}
+export type TDataReadPrototype = {
+  prototypeId: string
+}
+export type TDataUpdatePrototype = {
+  prototypeId: string
+  requestBody: PrototypeUpdate
+}
+export type TDataDeletePrototype = {
+  prototypeId: string
+}
+export type TDataReadCollaborators = {
+  prototypeId: string
+}
+export type TDataAddCollaborator = {
+  prototypeId: string
+  requestBody: CollaboratorAdd
+  userId: string
+}
+export type TDataUpdateCollaborator = {
+  prototypeId: string
+  requestBody: CollaboratorUpdate
+  userId: string
+}
+export type TDataRemoveCollaborator = {
+  prototypeId: string
+  userId: string
+}
+
+export class PrototypesService {
+  /**
+   * Read Prototypes
+   * Retrieve prototypes. Returns public prototypes and user's own prototypes.
+   * @returns PrototypesPublic Successful Response
+   * @throws ApiError
+   */
+  public static readPrototypes(
+    data: TDataReadPrototypes = {},
+  ): CancelablePromise<PrototypesPublic> {
+    const { limit = 100, skip = 0 } = data
+    return __request(OpenAPI, {
+      method: "GET",
+      url: "/api/v1/prototypes/",
+      query: {
+        skip,
+        limit,
+      },
+      errors: {
+        422: `Validation Error`,
+      },
+    })
+  }
+
+  /**
+   * Create Prototype
+   * Create new prototype.
+   * @returns PrototypePublic Successful Response
+   * @throws ApiError
+   */
+  public static createPrototype(
+    data: TDataCreatePrototype,
+  ): CancelablePromise<PrototypePublic> {
+    const { requestBody } = data
+    return __request(OpenAPI, {
+      method: "POST",
+      url: "/api/v1/prototypes/",
+      body: requestBody,
+      mediaType: "application/json",
+      errors: {
+        422: `Validation Error`,
+      },
+    })
+  }
+
+  /**
+   * Read Prototype
+   * Get prototype by ID.
+   * @returns PrototypePublic Successful Response
+   * @throws ApiError
+   */
+  public static readPrototype(
+    data: TDataReadPrototype,
+  ): CancelablePromise<PrototypePublic> {
+    const { prototypeId } = data
+    return __request(OpenAPI, {
+      method: "GET",
+      url: "/api/v1/prototypes/{prototype_id}",
+      path: {
+        prototype_id: prototypeId,
+      },
+      errors: {
+        422: `Validation Error`,
+      },
+    })
+  }
+
+  /**
+   * Update Prototype
+   * Update a prototype.
+   * @returns PrototypePublic Successful Response
+   * @throws ApiError
+   */
+  public static updatePrototype(
+    data: TDataUpdatePrototype,
+  ): CancelablePromise<PrototypePublic> {
+    const { prototypeId, requestBody } = data
+    return __request(OpenAPI, {
+      method: "PUT",
+      url: "/api/v1/prototypes/{prototype_id}",
+      path: {
+        prototype_id: prototypeId,
+      },
+      body: requestBody,
+      mediaType: "application/json",
+      errors: {
+        422: `Validation Error`,
+      },
+    })
+  }
+
+  /**
+   * Delete Prototype
+   * Delete a prototype. Only owner can delete.
+   * @returns Message Successful Response
+   * @throws ApiError
+   */
+  public static deletePrototype(
+    data: TDataDeletePrototype,
+  ): CancelablePromise<Message> {
+    const { prototypeId } = data
+    return __request(OpenAPI, {
+      method: "DELETE",
+      url: "/api/v1/prototypes/{prototype_id}",
+      path: {
+        prototype_id: prototypeId,
+      },
+      errors: {
+        422: `Validation Error`,
+      },
+    })
+  }
+
+  /**
+   * Read Collaborators
+   * Get all collaborators for a prototype.
+   * @returns CollaboratorsPublic Successful Response
+   * @throws ApiError
+   */
+  public static readCollaborators(
+    data: TDataReadCollaborators,
+  ): CancelablePromise<CollaboratorsPublic> {
+    const { prototypeId } = data
+    return __request(OpenAPI, {
+      method: "GET",
+      url: "/api/v1/prototypes/{prototype_id}/collaborators",
+      path: {
+        prototype_id: prototypeId,
+      },
+      errors: {
+        422: `Validation Error`,
+      },
+    })
+  }
+
+  /**
+   * Add Collaborator
+   * Add a collaborator to a prototype using their user ID.
+   * @returns CollaboratorInfo Successful Response
+   * @throws ApiError
+   */
+  public static addCollaborator(
+    data: TDataAddCollaborator,
+  ): CancelablePromise<CollaboratorInfo> {
+    const { prototypeId, requestBody, userId } = data
+    return __request(OpenAPI, {
+      method: "POST",
+      url: "/api/v1/prototypes/{prototype_id}/collaborators/{user_id}",
+      path: {
+        prototype_id: prototypeId,
+        user_id: userId,
+      },
+      body: requestBody,
+      mediaType: "application/json",
+      errors: {
+        422: `Validation Error`,
+      },
+    })
+  }
+
+  /**
+   * Update Collaborator
+   * Update a collaborator's role. Only owner can update roles.
+   * @returns CollaboratorInfo Successful Response
+   * @throws ApiError
+   */
+  public static updateCollaborator(
+    data: TDataUpdateCollaborator,
+  ): CancelablePromise<CollaboratorInfo> {
+    const { prototypeId, requestBody, userId } = data
+    return __request(OpenAPI, {
+      method: "PUT",
+      url: "/api/v1/prototypes/{prototype_id}/collaborators/{user_id}",
+      path: {
+        prototype_id: prototypeId,
+        user_id: userId,
+      },
+      body: requestBody,
+      mediaType: "application/json",
+      errors: {
+        422: `Validation Error`,
+      },
+    })
+  }
+
+  /**
+   * Remove Collaborator
+   * Remove a collaborator from a prototype using their user ID. Only owner can remove collaborators.
+   * @returns Message Successful Response
+   * @throws ApiError
+   */
+  public static removeCollaborator(
+    data: TDataRemoveCollaborator,
+  ): CancelablePromise<Message> {
+    const { prototypeId, userId } = data
+    return __request(OpenAPI, {
+      method: "DELETE",
+      url: "/api/v1/prototypes/{prototype_id}/collaborators/{user_id}",
+      path: {
+        prototype_id: prototypeId,
+        user_id: userId,
+      },
+      errors: {
+        422: `Validation Error`,
+      },
+    })
+  }
+}
+
 export type TDataTestEmail = {
   emailTo: string
 }
@@ -396,134 +644,6 @@ export class UtilsService {
     return __request(OpenAPI, {
       method: "GET",
       url: "/api/v1/utils/health-check/",
-    })
-  }
-}
-
-export type TDataReadItems = {
-  limit?: number
-  skip?: number
-}
-export type TDataCreateItem = {
-  requestBody: ItemCreate
-}
-export type TDataReadItem = {
-  id: string
-}
-export type TDataUpdateItem = {
-  id: string
-  requestBody: ItemUpdate
-}
-export type TDataDeleteItem = {
-  id: string
-}
-
-export class ItemsService {
-  /**
-   * Read Items
-   * Retrieve items.
-   * @returns ItemsPublic Successful Response
-   * @throws ApiError
-   */
-  public static readItems(
-    data: TDataReadItems = {},
-  ): CancelablePromise<ItemsPublic> {
-    const { limit = 100, skip = 0 } = data
-    return __request(OpenAPI, {
-      method: "GET",
-      url: "/api/v1/items/",
-      query: {
-        skip,
-        limit,
-      },
-      errors: {
-        422: `Validation Error`,
-      },
-    })
-  }
-
-  /**
-   * Create Item
-   * Create new item.
-   * @returns ItemPublic Successful Response
-   * @throws ApiError
-   */
-  public static createItem(
-    data: TDataCreateItem,
-  ): CancelablePromise<ItemPublic> {
-    const { requestBody } = data
-    return __request(OpenAPI, {
-      method: "POST",
-      url: "/api/v1/items/",
-      body: requestBody,
-      mediaType: "application/json",
-      errors: {
-        422: `Validation Error`,
-      },
-    })
-  }
-
-  /**
-   * Read Item
-   * Get item by ID.
-   * @returns ItemPublic Successful Response
-   * @throws ApiError
-   */
-  public static readItem(data: TDataReadItem): CancelablePromise<ItemPublic> {
-    const { id } = data
-    return __request(OpenAPI, {
-      method: "GET",
-      url: "/api/v1/items/{id}",
-      path: {
-        id,
-      },
-      errors: {
-        422: `Validation Error`,
-      },
-    })
-  }
-
-  /**
-   * Update Item
-   * Update an item.
-   * @returns ItemPublic Successful Response
-   * @throws ApiError
-   */
-  public static updateItem(
-    data: TDataUpdateItem,
-  ): CancelablePromise<ItemPublic> {
-    const { id, requestBody } = data
-    return __request(OpenAPI, {
-      method: "PUT",
-      url: "/api/v1/items/{id}",
-      path: {
-        id,
-      },
-      body: requestBody,
-      mediaType: "application/json",
-      errors: {
-        422: `Validation Error`,
-      },
-    })
-  }
-
-  /**
-   * Delete Item
-   * Delete an item.
-   * @returns Message Successful Response
-   * @throws ApiError
-   */
-  public static deleteItem(data: TDataDeleteItem): CancelablePromise<Message> {
-    const { id } = data
-    return __request(OpenAPI, {
-      method: "DELETE",
-      url: "/api/v1/items/{id}",
-      path: {
-        id,
-      },
-      errors: {
-        422: `Validation Error`,
-      },
     })
   }
 }
