@@ -366,6 +366,12 @@ export class UsersService {
   }
 }
 
+export type TDataCheckPrototypePublic = {
+  prototypeId: string
+}
+export type TDataReadPublicPrototype = {
+  prototypeId: string
+}
 export type TDataReadPrototypes = {
   limit?: number
   skip?: number
@@ -402,6 +408,50 @@ export type TDataRemoveCollaborator = {
 }
 
 export class PrototypesService {
+  /**
+   * Check Prototype Public
+   * Check if a prototype is public. This endpoint doesn't require authentication.
+   * @returns boolean Successful Response
+   * @throws ApiError
+   */
+  public static checkPrototypePublic(
+    data: TDataCheckPrototypePublic,
+  ): CancelablePromise<Record<string, boolean>> {
+    const { prototypeId } = data
+    return __request(OpenAPI, {
+      method: "GET",
+      url: "/api/v1/prototypes/public/check/{prototype_id}",
+      path: {
+        prototype_id: prototypeId,
+      },
+      errors: {
+        422: `Validation Error`,
+      },
+    })
+  }
+
+  /**
+   * Read Public Prototype
+   * Get public prototype by ID. No authentication required.
+   * @returns PrototypePublic Successful Response
+   * @throws ApiError
+   */
+  public static readPublicPrototype(
+    data: TDataReadPublicPrototype,
+  ): CancelablePromise<PrototypePublic> {
+    const { prototypeId } = data
+    return __request(OpenAPI, {
+      method: "GET",
+      url: "/api/v1/prototypes/public/{prototype_id}",
+      path: {
+        prototype_id: prototypeId,
+      },
+      errors: {
+        422: `Validation Error`,
+      },
+    })
+  }
+
   /**
    * Read Prototypes
    * Retrieve prototypes. Returns public prototypes and user's own prototypes.
@@ -448,7 +498,7 @@ export class PrototypesService {
 
   /**
    * Read Prototype
-   * Get prototype by ID.
+   * Get prototype by ID. Requires authentication and proper access permissions.
    * @returns PrototypePublic Successful Response
    * @throws ApiError
    */

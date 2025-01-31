@@ -1,5 +1,5 @@
 import uuid
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException
 
@@ -18,6 +18,38 @@ from app.models import (
 )
 
 router = APIRouter()
+
+
+@router.get("/public/check/{prototype_id}")
+def check_prototype_public(
+    *, session: SessionDep, prototype_id: uuid.UUID
+) -> dict[str, bool]:
+    """
+    Check if a prototype is public. This endpoint doesn't require authentication.
+    """
+    prototype = crud.get_prototype(session=session, prototype_id=prototype_id)
+    if not prototype:
+        raise HTTPException(status_code=404, detail="Prototype not found")
+    return {"is_public": prototype.visibility == "public"}
+
+
+@router.get("/public/{prototype_id}", response_model=PrototypePublic)
+def read_public_prototype(
+    *, 
+    session: SessionDep, 
+    prototype_id: uuid.UUID,
+) -> Any:
+    """
+    Get public prototype by ID. No authentication required.
+    """
+    prototype = crud.get_prototype(session=session, prototype_id=prototype_id)
+    if not prototype:
+        raise HTTPException(status_code=404, detail="Prototype not found")
+
+    if prototype.visibility != "public":
+        raise HTTPException(status_code=404, detail="Prototype not found")
+        
+    return prototype
 
 
 @router.get("/", response_model=PrototypesPublic)
@@ -49,16 +81,22 @@ def create_prototype(
 
 @router.get("/{prototype_id}", response_model=PrototypePublic)
 def read_prototype(
-    *, session: SessionDep, current_user: CurrentUser, prototype_id: uuid.UUID
+    *, 
+    session: SessionDep, 
+    prototype_id: uuid.UUID,
+    current_user: CurrentUser,
 ) -> Any:
     """
-    Get prototype by ID.
+    Get prototype by ID. Requires authentication and proper access permissions.
     """
     prototype = crud.get_prototype(session=session, prototype_id=prototype_id)
     if not prototype or not crud.can_access_prototype(
-        session=session, user_id=current_user.id, prototype_id=prototype_id
+        session=session, 
+        user_id=current_user.id, 
+        prototype_id=prototype_id
     ):
         raise HTTPException(status_code=403, detail="Access denied")
+        
     return prototype
 
 
