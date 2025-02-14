@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
@@ -35,8 +35,8 @@ def check_prototype_public(
 
 @router.get("/public/{prototype_id}", response_model=PrototypePublic)
 def read_public_prototype(
-    *, 
-    session: SessionDep, 
+    *,
+    session: SessionDep,
     prototype_id: uuid.UUID,
 ) -> Any:
     """
@@ -48,7 +48,7 @@ def read_public_prototype(
 
     if prototype.visibility != "public":
         raise HTTPException(status_code=404, detail="Prototype not found")
-        
+
     return prototype
 
 
@@ -81,8 +81,8 @@ def create_prototype(
 
 @router.get("/{prototype_id}", response_model=PrototypePublic)
 def read_prototype(
-    *, 
-    session: SessionDep, 
+    *,
+    session: SessionDep,
     prototype_id: uuid.UUID,
     current_user: CurrentUser,
 ) -> Any:
@@ -91,12 +91,10 @@ def read_prototype(
     """
     prototype = crud.get_prototype(session=session, prototype_id=prototype_id)
     if not prototype or not crud.can_access_prototype(
-        session=session, 
-        user_id=current_user.id, 
-        prototype_id=prototype_id
+        session=session, user_id=current_user.id, prototype_id=prototype_id
     ):
         raise HTTPException(status_code=403, detail="Access denied")
-        
+
     return prototype
 
 
