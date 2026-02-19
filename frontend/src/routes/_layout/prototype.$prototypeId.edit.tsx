@@ -1,39 +1,85 @@
-import {
-    Box,
-    Container,
-    Heading,
-    HStack,
-    Spinner,
-    Text,
-} from "@chakra-ui/react"
-import Editor, { loader } from "@monaco-editor/react"
-import { useMutation, useQuery } from "@tanstack/react-query"
+import { Button } from "@chakra-ui/react"
 import { createFileRoute, redirect } from "@tanstack/react-router"
-//@ts-ignore
-import type { DebouncedFunc } from "lodash-es"
-//@ts-ignore
-import { debounce } from "lodash-es"
-import { useCallback, useEffect, useRef, useState } from "react"
-
-import schema from "../../cli-schema/commands-schema.json"
-import { PrototypesService } from "../../client"
+import {
+    addEdge,
+    applyEdgeChanges,
+    applyNodeChanges,
+    Background,
+    Connection,
+    Controls,
+    Edge,
+    EdgeChange,
+    Node,
+    NodeChange,
+    NodeTypes,
+    ReactFlow,
+} from "@xyflow/react"
+import "@xyflow/react/dist/style.css"
+import { useCallback, useState } from "react"
+import CommandNode from "../../components/NodeEditor/CommandNode"
+import InputHandlerNode from "../../components/NodeEditor/InputComponentNode"
+import "../../components/NodeEditor/node.css"
+import PrototypeNode from "../../components/NodeEditor/PrototypeNode"
+import SelectHandlerNode from "../../components/NodeEditor/SelectComponentNode"
+import TextHandlerNode from "../../components/NodeEditor/TextComponentNode"
 import { isLoggedIn } from "../../hooks/useAuth"
+import generateJson from "../../utils/nodesToJson"
 
-// Setup Monaco JSON schema validation
-loader.init().then((monaco) => {
-    monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-        validate: true,
-        schemas: [
-            {
-                uri: "http://myschema/prototype-schema.json",
-                fileMatch: ["*"],
-                schema,
-            },
-        ],
-    })
-})
+// Define node data types
+interface BaseNodeData {
+    onChange: (field: string, value: any) => void
+}
 
-type SaveStatus = "saved" | "saving" | "unsaved"
+interface PrototypeNodeData extends BaseNodeData {
+    welcome: string
+}
+
+interface CommandNodeData extends BaseNodeData {
+    name: string
+    description: string
+}
+
+interface TextHandlerNodeData extends BaseNodeData {
+    output: string
+}
+
+interface InputHandlerNodeData extends BaseNodeData {
+    name: string
+    message: string
+}
+
+interface SelectHandlerNodeData extends InputHandlerNodeData {
+    choices: string[]
+}
+
+// Define custom node types
+type CustomNode = Node<
+    | PrototypeNodeData
+    | CommandNodeData
+    | TextHandlerNodeData
+    | InputHandlerNodeData
+    | SelectHandlerNodeData
+>
+
+// Define node types mapping
+const nodeTypes: NodeTypes = {
+    prototype: PrototypeNode,
+    command: CommandNode,
+    textHandler: TextHandlerNode,
+    inputHandler: InputHandlerNode,
+    selectHandler: SelectHandlerNode,
+}
+
+const initialNodes: CustomNode[] = [
+    {
+        id: "prototype",
+        type: "prototype",
+        position: { x: 0, y: 0 },
+        data: { welcome: "Welcome to the CLI", onChange: () => {} },
+    },
+]
+
+const initialEdges: Edge[] = []
 
 export const Route = createFileRoute("/_layout/prototype/$prototypeId/edit")({
     beforeLoad: async () => {
@@ -43,201 +89,127 @@ export const Route = createFileRoute("/_layout/prototype/$prototypeId/edit")({
             })
         }
     },
-    component: EditComponent,
+    component: Flow,
 })
 
-function EditComponent() {
-    const { prototypeId } = Route.useParams()
-    const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved")
-    const [lastSaved, setLastSaved] = useState<Date | null>(null)
-    const editorContentRef = useRef<string>("")
+function Flow() {
+    const [nodes, setNodes] = useState<CustomNode[]>(initialNodes)
+    const [edges, setEdges] = useState<Edge[]>(initialEdges)
 
-    // Fetch prototype data
-    const { data: prototype, isLoading } = useQuery({
-        queryKey: ["prototype", prototypeId],
-        queryFn: () => PrototypesService.readPrototype({ prototypeId }),
-    })
-
-    // Update prototype mutation
-    const { mutate: updatePrototype } = useMutation({
-        mutationFn: (content: Record<string, unknown>) =>
-            PrototypesService.updatePrototype({
-                prototypeId,
-                requestBody: {
-                    content,
-                },
-            }),
-        onMutate: () => {
-            setSaveStatus("saving")
-        },
-        onSuccess: () => {
-            setSaveStatus("saved")
-            setLastSaved(new Date())
-        },
-        onError: () => {
-            setSaveStatus("unsaved")
-        },
-    })
-
-    // Debounced save function
-    const debouncedSave: DebouncedFunc<
-        (content: Record<string, unknown>) => void
-    > = useCallback(
-        debounce(
-            (content: Record<string, unknown>) => {
-                updatePrototype(content)
-            },
-            5000,
-            { maxWait: 10000 }
-        ),
-        [updatePrototype]
+    const onNodesChange = useCallback(
+        (changes: NodeChange[]) =>
+            setNodes((nds) => applyNodeChanges(changes, nds)),
+        []
     )
 
-    // Manual save function with debounce cancellation
-    const saveContent = useCallback(() => {
-        // Cancel any pending auto-save
-        debouncedSave.cancel()
+    const onEdgesChange = useCallback(
+        (changes: EdgeChange[]) =>
+            setEdges((eds) => applyEdgeChanges(changes, eds)),
+        []
+    )
 
-        try {
-            const content = JSON.parse(editorContentRef.current)
-            // Immediately save content
-            updatePrototype(content)
-        } catch (error) {
-            console.error("Invalid JSON:", error)
-        }
-    }, [updatePrototype, debouncedSave])
+    const onConnect = useCallback(
+        (params: Connection) => setEdges((eds) => addEdge(params, eds)),
+        []
+    )
 
-    // Handle keyboard shortcuts
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === "s") {
-                e.preventDefault()
-                saveContent()
-            }
-        }
-
-        document.addEventListener("keydown", handleKeyDown)
-        return () => document.removeEventListener("keydown", handleKeyDown)
-    }, [saveContent])
-
-    // Clean up debounce on unmount
-    useEffect(() => {
-        return () => {
-            debouncedSave.cancel()
-        }
-    }, [debouncedSave])
-
-    // Handle editor changes
-    const handleEditorChange = (value: string | undefined) => {
-        if (!value) return
-
-        editorContentRef.current = value
-
-        try {
-            const content = JSON.parse(value)
-            // Only set unsaved status if we're not already saving
-            if (saveStatus !== "saving") {
-                setSaveStatus("unsaved")
-            }
-            debouncedSave(content)
-        } catch (error) {
-            // Don't save if JSON is invalid
-            console.error("Invalid JSON:", error)
-        }
+    const updateNodeData = (nodeId: string, field: string, value: any) => {
+        setNodes((nds) =>
+            nds.map((node) => {
+                if (node.id === nodeId) {
+                    return {
+                        ...node,
+                        data: {
+                            ...node.data,
+                            [field]: value,
+                        },
+                    }
+                }
+                return node
+            })
+        )
     }
 
-    // Format the last saved time
-    const getLastSavedText = () => {
-        if (!lastSaved) return ""
-        const now = new Date()
-        const diff = now.getTime() - lastSaved.getTime()
-
-        if (diff < 60000) {
-            return "Last saved less than a minute ago"
-        } else if (diff < 3600000) {
-            const minutes = Math.floor(diff / 60000)
-            return `Last saved ${minutes} minute${minutes > 1 ? "s" : ""} ago`
-        } else {
-            return `Last saved at ${lastSaved.toLocaleTimeString()}`
+    const addNode = (
+        type: "command" | "textHandler" | "inputHandler" | "selectHandler"
+    ) => {
+        const baseNodeData: BaseNodeData = {
+            onChange: (field: string, value: any) =>
+                updateNodeData(`${type}-${nodes.length}`, field, value),
         }
-    }
 
-    if (isLoading) {
-        return <div>Loading...</div>
-    }
+        let newNode: CustomNode = {
+            id: `${type}-${nodes.length}`,
+            type,
+            position: { x: 250, y: nodes.length * 150 },
+            data: baseNodeData,
+        }
 
-    const initialValue = JSON.stringify(prototype?.content || {}, null, 2)
+        switch (type) {
+            case "command":
+                newNode.data = {
+                    ...baseNodeData,
+                    name: `Command ${nodes.length}`,
+                    description: "",
+                }
+                break
+            case "textHandler":
+                newNode.data = { ...baseNodeData, output: "" }
+                break
+            case "inputHandler":
+            case "selectHandler":
+                newNode.data = {
+                    ...baseNodeData,
+                    name: "",
+                    message: "",
+                    ...(type === "selectHandler" ? { choices: [] } : {}),
+                }
+                break
+        }
+
+        setNodes((nds) => [...nds, newNode])
+    }
 
     return (
-        <Container
-            maxW="full"
-            h="100vh"
-            p={0}
-            display="flex"
-            flexDirection="column"
-            overflow="hidden"
+        <div
+            style={{
+                height: "100vh",
+                width: "100%",
+                display: "flex",
+                flexDirection: "column",
+            }}
         >
-            <Box p={0} flexShrink={0}>
-                <Heading
-                    size="lg"
-                    textAlign={{ base: "center", md: "left" }}
-                    py={12}
-                    px={4}
+            <div style={{ padding: 24, display: "flex", gap: 10 }}>
+                <Button onClick={() => addNode("command")}>
+                    Add Command Node
+                </Button>
+                <Button onClick={() => addNode("textHandler")}>
+                    Add Text Handler
+                </Button>
+                <Button onClick={() => addNode("inputHandler")}>
+                    Add Input Handler
+                </Button>
+                <Button onClick={() => addNode("selectHandler")}>
+                    Add Select Handler
+                </Button>
+                <Button onClick={() => generateJson(nodes, edges)}>
+                    Generate JSON
+                </Button>
+            </div>
+            <div style={{ flex: 1 }}>
+                <ReactFlow
+                    nodes={nodes}
+                    onNodesChange={onNodesChange}
+                    edges={edges}
+                    onEdgesChange={onEdgesChange}
+                    onConnect={onConnect}
+                    nodeTypes={nodeTypes}
+                    fitView
                 >
-                    {prototype?.title}
-                </Heading>
-            </Box>
-            <Box position="relative" flex={1} minH={0} px={4}>
-                <HStack
-                    position="absolute"
-                    top={2}
-                    right={4}
-                    zIndex={1}
-                    spacing={3}
-                    bg="gray.800"
-                    p={2}
-                    borderRadius="md"
-                >
-                    {saveStatus === "saving" && (
-                        <HStack>
-                            <Spinner size="sm" />
-                            <Text fontSize="sm" color="gray.300">
-                                Saving...
-                            </Text>
-                        </HStack>
-                    )}
-                    {saveStatus === "saved" && (
-                        <Text fontSize="sm" color="green.300">
-                            ✓ Saved
-                        </Text>
-                    )}
-                    {saveStatus === "unsaved" && (
-                        <Text fontSize="sm" color="yellow.300">
-                            Unsaved changes
-                        </Text>
-                    )}
-                    {lastSaved && (
-                        <Text fontSize="sm" color="gray.400">
-                            {getLastSavedText()}
-                        </Text>
-                    )}
-                </HStack>
-                <Editor
-                    height="100%"
-                    defaultValue={initialValue}
-                    defaultLanguage="json"
-                    onChange={handleEditorChange}
-                    options={{
-                        minimap: { enabled: false },
-                        fontSize: 14,
-                        wordWrap: "on",
-                        formatOnPaste: true,
-                        formatOnType: true,
-                        automaticLayout: true,
-                    }}
-                    theme="vs-light"
-                />
-            </Box>
-        </Container>
+                    <Background />
+                    <Controls />
+                </ReactFlow>
+            </div>
+        </div>
     )
 }
